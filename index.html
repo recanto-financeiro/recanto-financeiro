@@ -750,12 +750,19 @@ function renderAgenda(){
     const ov=st!=='finalizado'&&isOv(t);
     const myName=(currentProfile?.name||'').toLowerCase();
     const resp=(t.responsavel||'').toLowerCase().trim();
+    const vis=t.visibility||'team';
+    const uid=currentUser?.uid||'';
     const isOnlyMe=resp&&resp===myName;
-    const noResp=!resp;
-    const isTeam=!noResp&&!isOnlyMe;
-    const respClass=noResp?'no-resp':isOnlyMe?'mine-only':'team-task';
+    // Azul (mine-only): tarefa privada minha OU atribuída só a mim e não é de equipe
+    // Laranja (team-task): equipe, compartilhada, ou atribuída a outro
+    let cardColor='';
+    if(vis==='private'&&t.createdBy===uid)cardColor='mine-only';
+    else if(vis==='shared')cardColor='team-task';
+    else if(vis==='team')cardColor='team-task';
+    else if(isOnlyMe)cardColor='mine-only';
+    else if(resp&&!isOnlyMe)cardColor='team-task';
     const card=document.createElement('div');
-    card.className=`task-card ${respClass} ${t.critico==='sim'?'critical':''} ${st==='finalizado'?'done-card':''} ${ov?'overdue':''}`;
+    card.className=`task-card ${cardColor} ${t.critico==='sim'?'critical':''} ${st==='finalizado'?'done-card':''} ${ov?'overdue':''}`;
     card.dataset.rec=rec;
     let ex='';
     if(rec==='esporadico'&&t.dataEspecifica)ex=`<span class="rec-badge esporadico">${pd(t.dataEspecifica).toLocaleDateString('pt-BR',{day:'numeric',month:'short',year:'numeric'})}</span>`;
@@ -791,7 +798,7 @@ function renderScratch(){
     const div=document.createElement('div');div.className='s-item'+(it.done?' done':'');
     div.draggable=true;div.dataset.idx=i;
     const dateTxt=it.createdAt?`<div style="font-size:.65rem;color:#aab;margin-top:3px;">Criado em ${new Date(it.createdAt).toLocaleDateString('pt-BR')}</div>`:'';
-    div.innerHTML=`<span style="cursor:grab;color:#ccc;font-size:.8rem;padding-right:2px">⠿</span><input type="checkbox" ${it.done?'checked':''} onchange="togSc(${i})"><span>${it.text}${dateTxt}</span><button class="s-del" onclick="delSc(${i})">✕</button>`;
+    div.innerHTML=`<span style="cursor:grab;color:#ddd;font-size:.6rem;padding:0 1px;flex-shrink:0;align-self:center">⠿</span><input type="checkbox" ${it.done?'checked':''} onchange="togSc(${i})"><span>${it.text}${dateTxt}</span><button class="s-del" onclick="delSc(${i})">✕</button>`;
     div.addEventListener('dragstart',e=>{dragSrcIdx=i;div.classList.add('dragging');e.dataTransfer.effectAllowed='move';});
     div.addEventListener('dragend',()=>{div.classList.remove('dragging');document.querySelectorAll('.s-item').forEach(el=>el.classList.remove('drag-over'));});
     div.addEventListener('dragover',e=>{e.preventDefault();div.classList.add('drag-over');});
