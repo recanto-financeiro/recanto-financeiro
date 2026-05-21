@@ -70,7 +70,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--td);min-he
 #app-screen{display:none;min-height:100vh}
 #app-screen.on{display:flex;flex-direction:row}
 .sidebar{position:fixed;top:0;left:0;bottom:0;width:var(--sidebar-w);background:var(--rc-navy);display:flex;flex-direction:column;z-index:100;overflow:hidden;overflow-y:auto}
-.sb-logo{padding:1.3rem 1.4rem 1rem;border-bottom:1px solid rgba(255,255,255,.07);display:flex;align-items:center;gap:.75rem;flex-shrink:0}
+.sb-logo{padding:1rem 1.2rem 1rem;border-bottom:1px solid rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .sb-logo-txt strong{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;color:white;letter-spacing:.5px;display:block;white-space:nowrap;line-height:1.1}
 .sb-logo-txt span{font-size:.63rem;color:#5060A0;letter-spacing:1.5px;text-transform:uppercase;white-space:nowrap}
 .sb-user{margin:.75rem .8rem .2rem;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:.65rem .8rem;display:flex;align-items:center;gap:.65rem;flex-shrink:0}
@@ -347,7 +347,7 @@ service cloud.firestore {
 <div id="app-screen">
   <aside class="sidebar" id="sidebar">
     <div class="sb-logo">
-      <img src="LOGO-RECANTO-COLORIDA.png" alt="Recanto Construtora" style="max-height:38px;width:auto;object-fit:contain;">
+      <img src="LOGO-RECANTO-COLORIDA.png" alt="Recanto Construtora" style="max-width:180px;width:100%;height:auto;object-fit:contain;">
     </div>
     <div class="sb-user">
       <div class="u-av" id="sb-av">?</div>
