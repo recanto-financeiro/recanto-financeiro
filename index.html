@@ -429,8 +429,8 @@ service cloud.firestore {
       <div class="fg"><label>Título da Atividade</label><input type="text" id="t-title" placeholder="Ex: Fechamento de Caixa"></div>
       <div class="fg"><label>Descrição</label><textarea id="t-desc" rows="2" placeholder="Detalhes..."></textarea></div>
       <div class="fr">
-        <div class="fg"><label>Responsável</label><input type="text" id="t-user" list="users-dl" placeholder="Nome do colaborador" autocomplete="off"><datalist id="users-dl"></datalist></div>
-        <div class="fg"><label>Criticidade</label><select id="t-crit"><option value="nao">Normal</option><option value="sim">Crítico ⚠️</option></select></div>
+        <div class="fg"><label>Responsável</label><select id="t-user"><option value="">— Selecione —</option></select></div>
+        <div class="fg"><label>Prioridade</label><select id="t-crit"><option value="nao">Normal</option><option value="alta">Alta 🔶</option><option value="sim">Urgente ⚠️</option></select></div>
       </div>
       <div class="fg">
         <label>Visibilidade da Tarefa</label>
@@ -758,7 +758,7 @@ function renderAgenda(){
     else if(isOnlyMe)cardColor='mine-only';
     else if(resp&&!isOnlyMe)cardColor='team-task';
     const card=document.createElement('div');
-    card.className=`task-card ${cardColor} ${t.critico==='sim'?'critical':''} ${st==='finalizado'?'done-card':''} ${ov?'overdue':''}`;
+    card.className=`task-card ${cardColor} ${(t.critico==='sim'||t.critico==='alta')?'critical':''} ${st==='finalizado'?'done-card':''} ${ov?'overdue':''}`;
     card.dataset.rec=rec;
     let ex='';
     if(rec==='esporadico'&&t.dataEspecifica)ex=`<span class="rec-badge esporadico">${pd(t.dataEspecifica).toLocaleDateString('pt-BR',{day:'numeric',month:'short',year:'numeric'})}</span>`;
@@ -768,7 +768,7 @@ function renderAgenda(){
       <div class="t-hdr">
         <span class="time-badge ${ov?'ov':''}">${ov?'🔴':'⏱'} ${fmtT(t)}</span>
         <span class="rec-badge ${rec}">${RI[rec]} ${RL[rec]}</span>
-        ${ex}${t.critico==='sim'?'<span class="crit-badge">⚠ Critico</span>':''}
+        ${ex}${t.critico==='sim'?'<span class="crit-badge">⚠ Urgente</span>':t.critico==='alta'?'<span class="crit-badge" style="background:#D97706">🔶 Alta</span>':''}
         ${ov?'<span class="crit-badge" style="background:#B45309">⌛ Atrasada</span>':''}
         <span class="status-pill ${st}" data-tid="${t.id}" data-status="${st}">${SL[st]}</span>
         <span class="resp-chip">${t.responsavel||'—'}</span>
@@ -808,17 +808,20 @@ function togSc(i){const a=getSc();a[i].done=!a[i].done;setSc(a);renderScratch();
 function delSc(i){const a=getSc();a.splice(i,1);setSc(a);renderScratch();}
 
 async function populateUDL(){
-  const dl=document.getElementById('users-dl');dl.innerHTML='';
+  const userSel=document.getElementById('t-user');
+  const curVal=userSel.value;
+  userSel.innerHTML='<option value="">— Selecione —</option>';
   const sharedSel=document.getElementById('t-shared-uid');sharedSel.innerHTML='<option value="">Selecione um usuário...</option>';
   try{
     const snap=await db.collection('users').get();
     snap.forEach(doc=>{
       const u=doc.data();const uid=doc.id;
-      const o=document.createElement('option');o.value=u.name;dl.appendChild(o);
+      const opt=document.createElement('option');opt.value=u.name;opt.text=u.name;userSel.appendChild(opt);
       if(uid!==currentUser?.uid){
-        const opt=document.createElement('option');opt.value=uid;opt.text=u.name+' ('+u.email+')';sharedSel.appendChild(opt);
+        const opt2=document.createElement('option');opt2.value=uid;opt2.text=u.name+' ('+u.email+')';sharedSel.appendChild(opt2);
       }
     });
+    if(curVal)userSel.value=curVal;
   }catch(e){}
 }
 
@@ -834,7 +837,10 @@ function clearModal(){
   ['t-title','t-desc','t-user','t-data-esp','an-day'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   document.getElementById('t-crit').value='nao';
   document.getElementById('t-visibility').value='team';
+  document.getElementById('t-visibility').disabled=false;
   document.getElementById('shared-user-wrap').style.display='none';
+  document.getElementById('shared-user-wrap').style.opacity='1';
+  document.getElementById('shared-user-wrap').style.pointerEvents='auto';
   document.getElementById('t-shared-uid').value='';
   const dd=document.getElementById('d-disp');if(dd){dd.className='d-disp empty';dd.innerHTML='📅 Nenhuma data selecionada';}
   selMDays.clear();selAnMo=-1;mcSel='';document.getElementById('time-preview').innerText='Selecione o horario e a duracao';
@@ -882,7 +888,15 @@ function editTask(id){
   if(rec==='mensal'&&t.diasMes){t.diasMes.forEach(d=>selMDays.add(d));genMG();updDD();}
   if(rec==='anual'){selAnMo=t.mesAnual??-1;document.getElementById('an-day').value=t.diaAnual||'';genAnM();}
   if(rec==='esporadico'&&t.dataEspecifica){mcSel=t.dataEspecifica;const d=pd(t.dataEspecifica);mcY=d.getFullYear();mcM=d.getMonth();genMC();const br=d.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});const dd=document.getElementById('d-disp');dd.className='d-disp filled';dd.innerHTML='📅 '+br.charAt(0).toUpperCase()+br.slice(1);document.getElementById('t-data-esp').value=t.dataEspecifica;}
-  document.getElementById('modal-title').innerText='Editando Tarefa';document.getElementById('btn-sv').innerText='Salvar Alteracoes';document.getElementById('task-modal').classList.add('open');
+  document.getElementById('modal-title').innerText='Editando Tarefa';document.getElementById('btn-sv').innerText='Salvar Alteracoes';
+  // Bloquear visibilidade se não for o criador
+  const isCreator=!t.createdBy||t.createdBy===currentUser?.uid;
+  const visSel=document.getElementById('t-visibility');
+  visSel.disabled=!isCreator;
+  visSel.title=isCreator?'':'Somente o criador pode alterar a visibilidade';
+  document.getElementById('shared-user-wrap').style.pointerEvents=isCreator?'auto':'none';
+  document.getElementById('shared-user-wrap').style.opacity=isCreator?'1':'0.5';
+  document.getElementById('task-modal').classList.add('open');
 }
 
 async function deleteTask(id){
