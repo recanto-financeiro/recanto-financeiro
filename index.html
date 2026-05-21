@@ -234,11 +234,16 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--td);min-he
 .add-u-form h4{font-family:'Barlow Condensed',sans-serif;font-size:.92rem;font-weight:700;color:var(--td);margin-bottom:.5rem}
 .adm-msg{text-align:center;font-size:.78rem;margin-top:.55rem;min-height:.9rem}
 .adm-msg.err{color:#DC2626}.adm-msg.ok{color:var(--green)}
-.task-card.mine-only{border-left-color:var(--c-mine)!important;background:linear-gradient(to right,#f0fdf8 0%,white 60%);}
-.task-card.mine-only .resp-chip::before{background:var(--c-mine);}
-.task-card.team-task{border-left-color:var(--c-team)!important;background:linear-gradient(to right,#faf5ff 0%,white 60%);}
-.task-card.team-task .resp-chip::before{background:var(--c-team);}
+.task-card.mine-only{border-left-color:#2127C9!important;background:linear-gradient(to right,#EEF0FF 0%,white 70%);}
+.task-card.mine-only .resp-chip::before{background:#2127C9;}
+.task-card.team-task{border-left-color:#F26020!important;background:linear-gradient(to right,#FFF4EE 0%,white 70%);}
+.task-card.team-task .resp-chip::before{background:#F26020;}
+.task-card.no-resp{border-left-color:#94A3B8!important;background:white;}
+.task-card.no-resp .resp-chip::before{background:#94A3B8;}
 .hid-date{position:fixed;opacity:0;width:0;height:0;pointer-events:none}
+.s-item{background:white;padding:.58rem .7rem;border-radius:7px;border:1px solid var(--brand-line);display:flex;align-items:flex-start;gap:7px;cursor:grab;transition:box-shadow .15s,opacity .15s;}
+.s-item.dragging{opacity:.45;box-shadow:0 4px 16px rgba(33,39,201,.18);cursor:grabbing;}
+.s-item.drag-over{border-color:var(--rc-blue);background:var(--rc-light);}
 .sb-tog{display:none;position:fixed;bottom:1rem;right:1rem;width:48px;height:48px;background:var(--rc-blue);border-radius:50%;border:none;color:white;font-size:1.25rem;cursor:pointer;z-index:200;box-shadow:0 4px 16px rgba(33,39,201,.4);align-items:center;justify-content:center}
 #fireworks-canvas{position:fixed;bottom:0;right:0;width:320px;height:320px;pointer-events:none;z-index:9999;}
 @media(max-width:900px){.scratch-sec{display:none}}
@@ -744,10 +749,11 @@ function renderAgenda(){
     const st=(t.statusByDate||{})[curDate]||'pendente';
     const ov=st!=='finalizado'&&isOv(t);
     const myName=(currentProfile?.name||'').toLowerCase();
-    const resp=(t.responsavel||'').toLowerCase();
+    const resp=(t.responsavel||'').toLowerCase().trim();
     const isOnlyMe=resp&&resp===myName;
-    const isTeam=!resp||resp.includes(' e ')||resp.includes(',')||(resp&&resp!==myName);
-    const respClass=isOnlyMe?'mine-only':isTeam?'team-task':'';
+    const noResp=!resp;
+    const isTeam=!noResp&&!isOnlyMe;
+    const respClass=noResp?'no-resp':isOnlyMe?'mine-only':'team-task';
     const card=document.createElement('div');
     card.className=`task-card ${respClass} ${t.critico==='sim'?'critical':''} ${st==='finalizado'?'done-card':''} ${ov?'overdue':''}`;
     card.dataset.rec=rec;
@@ -777,13 +783,20 @@ function renderAgenda(){
 
 function getSc(){return JSON.parse(localStorage.getItem('rc_sc_'+(currentUser?btoa(currentUser.uid):''))||'[]');}
 function setSc(a){localStorage.setItem('rc_sc_'+(currentUser?btoa(currentUser.uid):''),JSON.stringify(a));}
+let dragSrcIdx=null;
 function renderScratch(){
   const lst=document.getElementById('scratch-list');const items=getSc();lst.innerHTML='';
   if(!items.length){lst.innerHTML='<div class="s-empty">Nenhuma nota ainda.</div>';return;}
   items.forEach((it,i)=>{
     const div=document.createElement('div');div.className='s-item'+(it.done?' done':'');
+    div.draggable=true;div.dataset.idx=i;
     const dateTxt=it.createdAt?`<div style="font-size:.65rem;color:#aab;margin-top:3px;">Criado em ${new Date(it.createdAt).toLocaleDateString('pt-BR')}</div>`:'';
-    div.innerHTML=`<input type="checkbox" ${it.done?'checked':''} onchange="togSc(${i})"><span>${it.text}${dateTxt}</span><button class="s-del" onclick="delSc(${i})">✕</button>`;
+    div.innerHTML=`<span style="cursor:grab;color:#ccc;font-size:.8rem;padding-right:2px">⠿</span><input type="checkbox" ${it.done?'checked':''} onchange="togSc(${i})"><span>${it.text}${dateTxt}</span><button class="s-del" onclick="delSc(${i})">✕</button>`;
+    div.addEventListener('dragstart',e=>{dragSrcIdx=i;div.classList.add('dragging');e.dataTransfer.effectAllowed='move';});
+    div.addEventListener('dragend',()=>{div.classList.remove('dragging');document.querySelectorAll('.s-item').forEach(el=>el.classList.remove('drag-over'));});
+    div.addEventListener('dragover',e=>{e.preventDefault();div.classList.add('drag-over');});
+    div.addEventListener('dragleave',()=>div.classList.remove('drag-over'));
+    div.addEventListener('drop',e=>{e.preventDefault();div.classList.remove('drag-over');if(dragSrcIdx===null||dragSrcIdx===i)return;const a=getSc();const[moved]=a.splice(dragSrcIdx,1);a.splice(i,0,moved);setSc(a);renderScratch();});
     lst.appendChild(div);
   });
 }
