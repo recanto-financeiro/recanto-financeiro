@@ -750,11 +750,7 @@ function renderAgenda(){
     const ov=st!=='finalizado'&&isOv(t);
     const myName=(currentProfile?.name||'').toLowerCase();
     const resp=(t.responsavel||'').toLowerCase().trim();
-    const vis=t.visibility||'team';
-    const uid=currentUser?.uid||'';
     const isOnlyMe=resp&&resp===myName;
-    // Azul (mine-only): tarefa privada minha OU atribuída só a mim e não é de equipe
-    // Laranja (team-task): equipe, compartilhada, ou atribuída a outro
     let cardColor='';
     if(vis==='private'&&t.createdBy===uid)cardColor='mine-only';
     else if(vis==='shared')cardColor='team-task';
