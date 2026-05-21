@@ -746,8 +746,9 @@ function renderAgenda(){
     const myName=(currentProfile?.name||'').toLowerCase();
     const resp=(t.responsavel||'').toLowerCase();
     const isOnlyMe=resp&&resp===myName;
-    const isTeam=!resp||resp.includes(' e ')||resp.includes(',')|| (resp&&resp!==myName);
+    const isTeam=!resp||resp.includes(' e ')||resp.includes(',')||(resp&&resp!==myName);
     const respClass=isOnlyMe?'mine-only':isTeam?'team-task':'';
+    const card=document.createElement('div');
     card.className=`task-card ${respClass} ${t.critico==='sim'?'critical':''} ${st==='finalizado'?'done-card':''} ${ov?'overdue':''}`;
     card.dataset.rec=rec;
     let ex='';
