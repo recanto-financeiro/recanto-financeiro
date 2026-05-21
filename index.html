@@ -704,21 +704,25 @@ function handleDatePicked(val){
 function matches(t){
   const d=pd(curDate),rec=t.recorrencia||'semanal';
   switch(rec){
-    case 'diario': return isWorkday(d);
-    case 'semanal': return t.dia===curDay&&isWorkday(d);
+    case 'diario': return true;
+    case 'semanal': return t.dia===curDay;
     case 'mensal':{
-      if(!isWorkday(d))return false;
-      return(t.diasMes||[]).some(x=>{
-        let base;
-        if(x==='ultimo'){base=new Date(d.getFullYear(),d.getMonth()+1,0);}
-        else{base=new Date(d.getFullYear(),d.getMonth(),x);}
-        return fd(nextWorkday(base))===curDate;
-      });
+      if(t.somenteDiasUteis){
+        return(t.diasMes||[]).some(x=>{
+          let base;
+          if(x==='ultimo'){base=new Date(d.getFullYear(),d.getMonth()+1,0);}
+          else{base=new Date(d.getFullYear(),d.getMonth(),x);}
+          return fd(nextWorkday(base))===curDate;
+        });
+      }
+      return(t.diasMes||[]).some(x=>x==='ultimo'?isLD(d):x===d.getDate());
     }
     case 'anual':{
-      if(!isWorkday(d))return false;
-      const base=new Date(d.getFullYear(),t.mesAnual,t.diaAnual);
-      return fd(nextWorkday(base))===curDate;
+      if(t.somenteDiasUteis){
+        const base=new Date(d.getFullYear(),t.mesAnual,t.diaAnual);
+        return fd(nextWorkday(base))===curDate;
+      }
+      return d.getDate()===t.diaAnual&&d.getMonth()===t.mesAnual;
     }
     case 'esporadico': return t.dataEspecifica===curDate;
     default: return t.dia===curDay;
