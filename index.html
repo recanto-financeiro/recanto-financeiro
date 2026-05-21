@@ -430,7 +430,7 @@ service cloud.firestore {
       <div class="fg"><label>Descrição</label><textarea id="t-desc" rows="2" placeholder="Detalhes..."></textarea></div>
       <div class="fr">
         <div class="fg"><label>Responsável</label><select id="t-user"><option value="">— Selecione —</option></select></div>
-        <div class="fg"><label>Prioridade</label><select id="t-crit"><option value="nao">Normal</option><option value="alta">Alta 🔶</option><option value="sim">Urgente ⚠️</option></select></div>
+        <div class="fg"><label>Prioridade</label><select id="t-crit"><option value="nao">Normal</option><option value="alta">Alta ⚡</option><option value="sim">Urgente 🔥</option></select></div>
       </div>
       <div class="fg">
         <label>Visibilidade da Tarefa</label>
@@ -768,7 +768,8 @@ function renderAgenda(){
       <div class="t-hdr">
         <span class="time-badge ${ov?'ov':''}">${ov?'🔴':'⏱'} ${fmtT(t)}</span>
         <span class="rec-badge ${rec}">${RI[rec]} ${RL[rec]}</span>
-        ${ex}${t.critico==='sim'?'<span class="crit-badge">⚠ Urgente</span>':t.critico==='alta'?'<span class="crit-badge" style="background:#D97706">🔶 Alta</span>':''}
+        ${ex}${t.critico==='sim'?'<span class="crit-badge">🔥 Urgente</span>':t.critico==='alta'?'<span class="crit-badge" style="background:#D97706">⚡ Alta</span>':''}
+        ${vis==='private'?'<span class="crit-badge" style="background:#4B5563;letter-spacing:.5px">🔒 Particular</span>':vis==='shared'?'<span class="crit-badge" style="background:#7B3FBF;letter-spacing:.5px">🤝 Compartilhada</span>':'<span class="crit-badge" style="background:#0E7490;letter-spacing:.5px">🌐 Equipe</span>'}
         ${ov?'<span class="crit-badge" style="background:#B45309">⌛ Atrasada</span>':''}
         <span class="status-pill ${st}" data-tid="${t.id}" data-status="${st}">${SL[st]}</span>
         <span class="resp-chip">${t.responsavel||'—'}</span>
