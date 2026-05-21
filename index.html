@@ -25,7 +25,7 @@ const FIREBASE_CONFIG = {
 
 <style>
 
-:root{--rc-blue:#2127C9;--rc-blue2:#1220A8;--rc-orange:#F26020;--rc-navy:#080C44;--rc-light:#EEF0FF;--bg:#F4F5FF;--brand-line:#DDE0F8;--brand-sand:#F0F2FF;--green:#1E7F56;--td:#0F1240;--tm:#3C4070;--tl:#8890C0;--sidebar-w:272px;--r-diario:#7C3AED;--r-semanal:#2127C9;--r-mensal:#0E7490;--r-anual:#B45309;--r-esporadico:#E05010;--sp:#94A3B8;--sa:#D97706;--sf:#059669;}
+:root{--rc-blue:#2127C9;--rc-blue2:#1220A8;--rc-orange:#F26020;--rc-navy:#080C44;--rc-light:#EEF0FF;--bg:#F4F5FF;--brand-line:#DDE0F8;--brand-sand:#F0F2FF;--green:#1E7F56;--td:#0F1240;--tm:#3C4070;--tl:#8890C0;--sidebar-w:272px;--r-diario:#7C3AED;--r-semanal:#2127C9;--r-mensal:#0E7490;--r-anual:#B45309;--r-esporadico:#E05010;--sp:#94A3B8;--sa:#D97706;--sf:#059669;--c-mine:#1A8C5B;--c-team:#7B3FBF;}
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--td);min-height:100vh;overflow-x:hidden}
 #setup-screen{display:none;align-items:center;justify-content:center;min-height:100vh;padding:1rem;background:linear-gradient(150deg,#04082E 0%,#0A1060 50%,#06082A 100%)}
@@ -234,6 +234,10 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--td);min-he
 .add-u-form h4{font-family:'Barlow Condensed',sans-serif;font-size:.92rem;font-weight:700;color:var(--td);margin-bottom:.5rem}
 .adm-msg{text-align:center;font-size:.78rem;margin-top:.55rem;min-height:.9rem}
 .adm-msg.err{color:#DC2626}.adm-msg.ok{color:var(--green)}
+.task-card.mine-only{border-left-color:var(--c-mine)!important;background:linear-gradient(to right,#f0fdf8 0%,white 60%);}
+.task-card.mine-only .resp-chip::before{background:var(--c-mine);}
+.task-card.team-task{border-left-color:var(--c-team)!important;background:linear-gradient(to right,#faf5ff 0%,white 60%);}
+.task-card.team-task .resp-chip::before{background:var(--c-team);}
 .hid-date{position:fixed;opacity:0;width:0;height:0;pointer-events:none}
 .sb-tog{display:none;position:fixed;bottom:1rem;right:1rem;width:48px;height:48px;background:var(--rc-blue);border-radius:50%;border:none;color:white;font-size:1.25rem;cursor:pointer;z-index:200;box-shadow:0 4px 16px rgba(33,39,201,.4);align-items:center;justify-content:center}
 #fireworks-canvas{position:fixed;bottom:0;right:0;width:320px;height:320px;pointer-events:none;z-index:9999;}
@@ -475,6 +479,12 @@ const RI={diario:'☀️',semanal:'📅',mensal:'🗓️',anual:'🎯',esporadic
 const SC=['pendente','andamento','finalizado'];
 const SL={pendente:'⬜ Pendente',andamento:'🔄 Em Andamento',finalizado:'✅ Finalizado'};
 
+// Feriados nacionais fixos (MM-DD)
+const FERIADOS_FIXOS=new Set(['01-01','04-21','05-01','09-07','10-12','11-02','11-15','12-25']);
+function isFeriado(d){const k=`${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;return FERIADOS_FIXOS.has(k);}
+function isWorkday(d){const dow=d.getDay();return dow!==0&&dow!==6&&!isFeriado(d);}
+function nextWorkday(d){const r=new Date(d);while(!isWorkday(r))r.setDate(r.getDate()+1);return r;}
+
 let curDay='segunda',curDate=fd(new Date());
 let mcY=new Date().getFullYear(),mcM=new Date().getMonth(),mcSel='';
 let selMDays=new Set(),selAnMo=-1;
@@ -693,7 +703,26 @@ function handleDatePicked(val){
 
 function matches(t){
   const d=pd(curDate),rec=t.recorrencia||'semanal';
-  switch(rec){case 'diario':return true;case 'semanal':return t.dia===curDay;case 'mensal':return(t.diasMes||[]).some(x=>x==='ultimo'?isLD(d):x===d.getDate());case 'anual':return d.getDate()===t.diaAnual&&d.getMonth()===t.mesAnual;case 'esporadico':return t.dataEspecifica===curDate;default:return t.dia===curDay;}
+  switch(rec){
+    case 'diario': return isWorkday(d);
+    case 'semanal': return t.dia===curDay&&isWorkday(d);
+    case 'mensal':{
+      if(!isWorkday(d))return false;
+      return(t.diasMes||[]).some(x=>{
+        let base;
+        if(x==='ultimo'){base=new Date(d.getFullYear(),d.getMonth()+1,0);}
+        else{base=new Date(d.getFullYear(),d.getMonth(),x);}
+        return fd(nextWorkday(base))===curDate;
+      });
+    }
+    case 'anual':{
+      if(!isWorkday(d))return false;
+      const base=new Date(d.getFullYear(),t.mesAnual,t.diaAnual);
+      return fd(nextWorkday(base))===curDate;
+    }
+    case 'esporadico': return t.dataEspecifica===curDate;
+    default: return t.dia===curDay;
+  }
 }
 
 function renderAgenda(){
@@ -710,8 +739,12 @@ function renderAgenda(){
     const rec=t.recorrencia||'semanal';
     const st=(t.statusByDate||{})[curDate]||'pendente';
     const ov=st!=='finalizado'&&isOv(t);
-    const card=document.createElement('div');
-    card.className=`task-card ${t.critico==='sim'?'critical':''} ${st==='finalizado'?'done-card':''} ${ov?'overdue':''}`;
+    const myName=(currentProfile?.name||'').toLowerCase();
+    const resp=(t.responsavel||'').toLowerCase();
+    const isOnlyMe=resp&&resp===myName;
+    const isTeam=!resp||resp.includes(' e ')||resp.includes(',')|| (resp&&resp!==myName);
+    const respClass=isOnlyMe?'mine-only':isTeam?'team-task':'';
+    card.className=`task-card ${respClass} ${t.critico==='sim'?'critical':''} ${st==='finalizado'?'done-card':''} ${ov?'overdue':''}`;
     card.dataset.rec=rec;
     let ex='';
     if(rec==='esporadico'&&t.dataEspecifica)ex=`<span class="rec-badge esporadico">${pd(t.dataEspecifica).toLocaleDateString('pt-BR',{day:'numeric',month:'short',year:'numeric'})}</span>`;
@@ -744,11 +777,12 @@ function renderScratch(){
   if(!items.length){lst.innerHTML='<div class="s-empty">Nenhuma nota ainda.</div>';return;}
   items.forEach((it,i)=>{
     const div=document.createElement('div');div.className='s-item'+(it.done?' done':'');
-    div.innerHTML=`<input type="checkbox" ${it.done?'checked':''} onchange="togSc(${i})"><span>${it.text}</span><button class="s-del" onclick="delSc(${i})">✕</button>`;
+    const dateTxt=it.createdAt?`<div style="font-size:.65rem;color:#aab;margin-top:3px;">Criado em ${new Date(it.createdAt).toLocaleDateString('pt-BR')}</div>`:'';
+    div.innerHTML=`<input type="checkbox" ${it.done?'checked':''} onchange="togSc(${i})"><span>${it.text}${dateTxt}</span><button class="s-del" onclick="delSc(${i})">✕</button>`;
     lst.appendChild(div);
   });
 }
-function addScratch(){const inp=document.getElementById('scratch-in');const t=inp.value.trim();if(!t)return;const a=getSc();a.unshift({text:t,done:false});setSc(a);inp.value='';renderScratch();}
+function addScratch(){const inp=document.getElementById('scratch-in');const t=inp.value.trim();if(!t)return;const a=getSc();a.unshift({text:t,done:false,createdAt:Date.now()});setSc(a);inp.value='';renderScratch();}
 function togSc(i){const a=getSc();a[i].done=!a[i].done;setSc(a);renderScratch();}
 function delSc(i){const a=getSc();a.splice(i,1);setSc(a);renderScratch();}
 
