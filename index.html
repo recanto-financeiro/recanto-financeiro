@@ -416,6 +416,20 @@ service cloud.firestore {
         <div class="fg"><label>Responsável</label><input type="text" id="t-user" list="users-dl" placeholder="Nome do colaborador" autocomplete="off"><datalist id="users-dl"></datalist></div>
         <div class="fg"><label>Criticidade</label><select id="t-crit"><option value="nao">Normal</option><option value="sim">Crítico ⚠️</option></select></div>
       </div>
+      <div class="fg">
+        <label>Visibilidade da Tarefa</label>
+        <select id="t-visibility" onchange="onVisibilityChange()">
+          <option value="team">🌐 Equipe Financeiro (Todos)</option>
+          <option value="private">🔒 Apenas Eu (Particular)</option>
+          <option value="shared">🤝 Apenas eu e outro usuário que eu selecionar</option>
+        </select>
+      </div>
+      <div class="fg" id="shared-user-wrap" style="display:none">
+        <label>Compartilhar com</label>
+        <select id="t-shared-uid">
+          <option value="">Carregando usuários...</option>
+        </select>
+      </div>
     </div>
     <div class="m-foot">
       <button type="button" class="btn-save" id="btn-sv" onclick="saveTask()">Salvar na Agenda</button>
@@ -527,7 +541,10 @@ function reqN(){if('Notification'in window&&Notification.permission==='default')
 function cancelN(){Object.values(notifTimers).forEach(clearTimeout);notifTimers={};}
 function schedN(){
   cancelN();if(curDate!==fd(new Date()))return;
+  const uid=currentUser?.uid||'';
   taskCache.filter(matches).forEach(t=>{
+    const vis=t.visibility||'team';
+    if(vis!=='team' && t.createdBy!==uid && t.sharedWithUid!==uid)return;
     if(!t.horInicio||!t.duracao||t.duracao===0)return;
     if(((t.statusByDate||{})[curDate])==='finalizado')return;
     const[h,m]=t.horInicio.split(':').map(Number);const now=new Date();
@@ -677,6 +694,10 @@ function renderAgenda(){
   const list=taskCache.filter(matches);
   if(!list.length){el.innerHTML='<div class="empty-st"><div class="ei">📋</div><p>Nenhuma atividade para este dia.</p></div>';schedN();return;}
   list.forEach(t=>{
+    // Filtro de visibilidade
+    const vis=t.visibility||'team';
+    const uid=currentUser?.uid||'';
+    if(vis!=='team' && t.createdBy!==uid && t.sharedWithUid!==uid)return;
     const rec=t.recorrencia||'semanal';
     const st=(t.statusByDate||{})[curDate]||'pendente';
     const ov=st!=='finalizado'&&isOv(t);
@@ -724,7 +745,22 @@ function delSc(i){const a=getSc();a.splice(i,1);setSc(a);renderScratch();}
 
 async function populateUDL(){
   const dl=document.getElementById('users-dl');dl.innerHTML='';
-  try{const snap=await db.collection('users').get();snap.forEach(doc=>{const o=document.createElement('option');o.value=doc.data().name;dl.appendChild(o);});}catch(e){}
+  const sharedSel=document.getElementById('t-shared-uid');sharedSel.innerHTML='<option value="">Selecione um usuário...</option>';
+  try{
+    const snap=await db.collection('users').get();
+    snap.forEach(doc=>{
+      const u=doc.data();const uid=doc.id;
+      const o=document.createElement('option');o.value=u.name;dl.appendChild(o);
+      if(uid!==currentUser?.uid){
+        const opt=document.createElement('option');opt.value=uid;opt.text=u.name+' ('+u.email+')';sharedSel.appendChild(opt);
+      }
+    });
+  }catch(e){}
+}
+
+function onVisibilityChange(){
+  const v=document.getElementById('t-visibility').value;
+  document.getElementById('shared-user-wrap').style.display=v==='shared'?'block':'none';
 }
 
 function openModal(){clearModal();setRec('semanal');populateUDL();document.getElementById('t-day').value=curDay;document.getElementById('modal-title').innerText='Adicionar Nova Tarefa';document.getElementById('btn-sv').innerText='Salvar na Agenda';document.getElementById('task-modal').classList.add('open');}
@@ -733,6 +769,9 @@ function clearModal(){
   document.getElementById('t-id').value='';document.getElementById('t-hora').value='';document.getElementById('t-duracao').value='0';
   ['t-title','t-desc','t-user','t-data-esp','an-day'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   document.getElementById('t-crit').value='nao';
+  document.getElementById('t-visibility').value='team';
+  document.getElementById('shared-user-wrap').style.display='none';
+  document.getElementById('t-shared-uid').value='';
   const dd=document.getElementById('d-disp');if(dd){dd.className='d-disp empty';dd.innerHTML='📅 Nenhuma data selecionada';}
   selMDays.clear();selAnMo=-1;mcSel='';document.getElementById('time-preview').innerText='Selecione o horario e a duracao';
 }
@@ -749,7 +788,10 @@ function setRec(v){
 async function saveTask(){
   const title=document.getElementById('t-title').value.trim();if(!title){alert('Informe o titulo.');return;}
   const rec=document.getElementById('t-rec').value;const id=document.getElementById('t-id').value;
-  const item={tarefa:title,descricao:document.getElementById('t-desc').value.trim(),responsavel:document.getElementById('t-user').value.trim(),critico:document.getElementById('t-crit').value,recorrencia:rec,horInicio:document.getElementById('t-hora').value||'',duracao:parseInt(document.getElementById('t-duracao').value)||0,criadoPor:currentUser?.uid||'',updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
+  const vis=document.getElementById('t-visibility').value;
+  const sharedUid=vis==='shared'?document.getElementById('t-shared-uid').value:'';
+  if(vis==='shared'&&!sharedUid){alert('Selecione o usuário para compartilhar.');return;}
+  const item={tarefa:title,descricao:document.getElementById('t-desc').value.trim(),responsavel:document.getElementById('t-user').value.trim(),critico:document.getElementById('t-crit').value,recorrencia:rec,horInicio:document.getElementById('t-hora').value||'',duracao:parseInt(document.getElementById('t-duracao').value)||0,criadoPor:currentUser?.uid||'',createdBy:currentUser?.uid||'',visibility:vis,sharedWithUid:sharedUid,updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
   if(!id)item.createdAt=firebase.firestore.FieldValue.serverTimestamp();
   if(rec==='semanal')item.dia=document.getElementById('t-day').value;
   if(rec==='diario')item.dia='todos';
@@ -765,6 +807,14 @@ function editTask(id){
   const rec=t.recorrencia||'semanal';clearModal();setRec(rec);populateUDL();
   document.getElementById('t-id').value=t.id;document.getElementById('t-title').value=t.tarefa;document.getElementById('t-desc').value=t.descricao||'';document.getElementById('t-user').value=t.responsavel||'';document.getElementById('t-crit').value=t.critico||'nao';document.getElementById('t-hora').value=t.horInicio||'';document.getElementById('t-duracao').value=t.duracao||0;updTP();
   if(rec==='semanal')document.getElementById('t-day').value=t.dia||'segunda';
+  // restore visibility
+  const vis=t.visibility||'team';
+  document.getElementById('t-visibility').value=vis;
+  document.getElementById('shared-user-wrap').style.display=vis==='shared'?'block':'none';
+  if(vis==='shared'&&t.sharedWithUid){
+    // wait for populateUDL to finish then set value
+    setTimeout(()=>{document.getElementById('t-shared-uid').value=t.sharedWithUid;},200);
+  }
   if(rec==='mensal'&&t.diasMes){t.diasMes.forEach(d=>selMDays.add(d));genMG();updDD();}
   if(rec==='anual'){selAnMo=t.mesAnual??-1;document.getElementById('an-day').value=t.diaAnual||'';genAnM();}
   if(rec==='esporadico'&&t.dataEspecifica){mcSel=t.dataEspecifica;const d=pd(t.dataEspecifica);mcY=d.getFullYear();mcM=d.getMonth();genMC();const br=d.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});const dd=document.getElementById('d-disp');dd.className='d-disp filled';dd.innerHTML='📅 '+br.charAt(0).toUpperCase()+br.slice(1);document.getElementById('t-data-esp').value=t.dataEspecifica;}
