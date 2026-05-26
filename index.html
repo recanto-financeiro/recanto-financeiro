@@ -252,7 +252,8 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--td);min-he
 .task-card.no-resp{border-left-color:#94A3B8!important;background:white;}
 .task-card.no-resp .resp-chip::before{background:#94A3B8;}
 .hid-date{position:fixed;opacity:0;width:0;height:0;pointer-events:none}
-.s-item{background:white;padding:.58rem .7rem;border-radius:7px;border:1px solid var(--brand-line);display:flex;align-items:flex-start;gap:7px;cursor:grab;transition:box-shadow .15s,opacity .15s;}
+.s-item{background:white;padding:.58rem .7rem;border-radius:7px;border:1px solid var(--brand-line);display:flex;align-items:center;gap:7px;cursor:grab;transition:box-shadow .15s,opacity .15s;min-width:0;overflow:visible;}
+.s-item input[type=text]{flex:1;min-width:0;width:100%;font-size:.84rem;border:2px solid var(--rc-blue);border-radius:6px;padding:.3rem .5rem;outline:none;box-sizing:border-box;}
 .s-item.dragging{opacity:.45;box-shadow:0 4px 16px rgba(33,39,201,.18);cursor:grabbing;}
 .s-item.drag-over{border-color:var(--rc-blue);background:var(--rc-light);}
 .sb-tog{display:none;position:fixed;bottom:1rem;right:1rem;width:48px;height:48px;background:var(--rc-blue);border-radius:50%;border:none;color:white;font-size:1.25rem;cursor:pointer;z-index:200;box-shadow:0 4px 16px rgba(33,39,201,.4);align-items:center;justify-content:center}
@@ -690,10 +691,13 @@ function genCal(base=new Date()){
   const td=base.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   document.getElementById('top-date').innerText=td.charAt(0).toUpperCase()+td.slice(1);
   const dow=base.getDay();const mon=new Date(base);mon.setDate(base.getDate()+(dow===0?-6:1-dow));
+  // Set curDay based on actual day, defaulting to nearest weekday
+  if(dow>=1&&dow<=5){curDay=DM[dow];curDate=fd(base);}
+  else{curDay='segunda';curDate=fd(mon);} // weekend: show monday
   const todStr=fd(new Date());const cont=document.getElementById('sb-days');cont.innerHTML='';
   for(let i=1;i<=5;i++){
     const d=new Date(mon);d.setDate(mon.getDate()+(i-1));
-    const dayId=DM[i],dstr=fd(d);if(dow===i){curDay=dayId;curDate=dstr;}
+    const dayId=DM[i],dstr=fd(d);
     const isT=dstr===todStr;
     const btn=document.createElement('button');btn.className='day-btn'+(curDay===dayId?' active':'');
     btn.addEventListener('click',()=>selDay(dayId,dstr,d,btn));
@@ -753,6 +757,12 @@ function renderAgenda(){
   document.getElementById('day-lbl').innerText=DN[curDay];
   let list=taskCache.filter(matches);
   if(!list.length){el.innerHTML='<div class="empty-st"><div class="ei">📋</div><p>Nenhuma atividade para este dia.</p></div>';schedN();return;}
+  // Sort by start time first
+  list.sort((a,b)=>{
+    const ta=a.horInicio||'99:99',tb=b.horInicio||'99:99';
+    return ta.localeCompare(tb);
+  });
+  // Then apply manual order on top
   const order=getCardOrder(curDate);
   if(order.length){const map=Object.fromEntries(list.map(t=>[t.id,t]));const ordered=order.filter(id=>map[id]).map(id=>map[id]);const rest=list.filter(t=>!order.includes(t.id));list=[...ordered,...rest];}
   let dragSrcTask=null;
@@ -818,7 +828,7 @@ function renderScratch(){
     div.draggable=true;div.dataset.idx=i;
     const dateTxt=it.createdAt?`<div style="font-size:.65rem;color:#aab;margin-top:3px;">Criado em ${new Date(it.createdAt).toLocaleDateString('pt-BR')}</div>`:'';
     const hist=it.history||[];
-    const tooltipHtml=hist.length?`<div class="sc-tooltip"><strong>Versões anteriores:</strong>\n${hist.map((h,n)=>`${n+1}. "${h.text}" — ${new Date(h.editedAt).toLocaleDateString('pt-BR')}`).join('\n')}</div>`:'';
+    const tooltipHtml=hist.length?`<div class="sc-tooltip"><strong>Versões anteriores:</strong>\n${hist.map((h,n)=>`${n+1}. "${h.text}"\n    ${h.editedAtStr||new Date(h.editedAt).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})}`).join('\n')}</div>`:'';
     div.innerHTML=`<input type="checkbox" ${it.done?'checked':''} onchange="togSc(${i})"><span class="sc-tooltip-wrap">${it.text}${dateTxt}${tooltipHtml}</span><button class="sc-edit-btn" title="Editar nota" onclick="editSc(${i})">✏</button><button class="s-del" onclick="delSc(${i})">✕</button>`;
     // Position tooltip via JS
     if(hist.length){
@@ -844,17 +854,18 @@ function editSc(i){
   const div=items[i];if(!div)return;
   const spanWrap=div.querySelector('.sc-tooltip-wrap');
   const a=getSc();const it=a[i];
-  // Replace span content with input
   const oldText=it.text;
   const inp=document.createElement('input');
-  inp.type='text';inp.value=oldText;inp.style.cssText='flex:1;font-size:.84rem;border:1px solid var(--rc-blue,#2127C9);border-radius:5px;padding:.25rem .4rem;outline:none;width:100%;';
+  inp.type='text';inp.value=oldText;
   spanWrap.replaceWith(inp);
+  div.style.alignItems='center';
   inp.focus();inp.select();
   function save(){
     const novo=inp.value.trim();
     if(novo&&novo!==oldText){
       if(!a[i].history)a[i].history=[];
-      a[i].history.unshift({text:oldText,editedAt:Date.now()});
+      const now=new Date();
+      a[i].history.unshift({text:oldText,editedAt:now.getTime(),editedAtStr:now.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})});
       a[i].text=novo;
       setSc(a);
     }
