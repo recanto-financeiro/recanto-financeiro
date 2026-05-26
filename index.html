@@ -855,13 +855,15 @@ function editSc(i){
   const spanWrap=div.querySelector('.sc-tooltip-wrap');
   const a=getSc();const it=a[i];
   const oldText=it.text;
-  const inp=document.createElement('input');
-  inp.type='text';inp.value=oldText;
-  spanWrap.replaceWith(inp);
-  div.style.alignItems='center';
-  inp.focus();inp.select();
+  // Use textarea overlay positioned over the panel
+  const rect=div.getBoundingClientRect();
+  const ta=document.createElement('textarea');
+  ta.value=oldText;
+  ta.style.cssText=`position:fixed;top:${rect.top}px;left:${rect.left}px;width:${Math.max(rect.width,240)}px;min-height:60px;font-size:.84rem;font-family:inherit;border:2px solid var(--rc-blue,#2127C9);border-radius:7px;padding:.4rem .6rem;outline:none;box-sizing:border-box;z-index:9999;resize:none;box-shadow:0 4px 20px rgba(33,39,201,.2);`;
+  document.body.appendChild(ta);
+  ta.focus();ta.select();
   function save(){
-    const novo=inp.value.trim();
+    const novo=ta.value.trim();
     if(novo&&novo!==oldText){
       if(!a[i].history)a[i].history=[];
       const now=new Date();
@@ -869,10 +871,11 @@ function editSc(i){
       a[i].text=novo;
       setSc(a);
     }
+    ta.remove();
     renderScratch();
   }
-  inp.addEventListener('blur',save);
-  inp.addEventListener('keydown',e=>{if(e.key==='Enter')inp.blur();if(e.key==='Escape'){inp.value=oldText;inp.blur();}});
+  ta.addEventListener('blur',save);
+  ta.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();ta.blur();}if(e.key==='Escape'){ta.value=oldText;ta.blur();}});
 }
 function addScratch(){const inp=document.getElementById('scratch-in');const t=inp.value.trim();if(!t)return;const a=getSc();a.unshift({text:t,done:false,createdAt:Date.now(),history:[]});setSc(a);inp.value='';renderScratch();}
 function togSc(i){const a=getSc();a[i].done=!a[i].done;setSc(a);renderScratch();}
