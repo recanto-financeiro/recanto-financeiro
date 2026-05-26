@@ -122,6 +122,17 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--td);min-he
 .task-card:hover{box-shadow:0 6px 24px rgba(33,39,201,.12);transform:translateY(-1px)}
 .task-card[data-rec="diario"]{border-left-color:var(--r-diario)}.task-card[data-rec="semanal"]{border-left-color:var(--r-semanal)}.task-card[data-rec="mensal"]{border-left-color:var(--r-mensal)}.task-card[data-rec="anual"]{border-left-color:var(--r-anual)}.task-card[data-rec="esporadico"]{border-left-color:var(--r-esporadico)}
 .task-card.critical{border-left-color:#DC2626!important}.task-card.done-card{opacity:.58}.task-card.overdue{box-shadow:0 0 0 2px rgba(220,38,38,.15)!important;border-left-color:#DC2626!important}
+.task-card[draggable="true"]{cursor:grab}.task-card.dragging{opacity:.4;transform:scale(.98);box-shadow:0 8px 30px rgba(33,39,201,.18)!important;}
+.task-card.drag-over-card{border-top:3px solid var(--rc-blue);margin-top:-3px;}
+.sc-tooltip-wrap{position:relative}
+.sc-tooltip-wrap .sc-tooltip{display:none;position:fixed;background:#1e2340;color:#e2e8f0;font-size:.72rem;padding:.45rem .65rem;border-radius:7px;white-space:pre-wrap;max-width:220px;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.3);line-height:1.5;}
+.sc-tooltip-wrap:hover .sc-tooltip{display:block;}
+.sc-edit-btn{background:none;border:none;cursor:pointer;font-size:.7rem;color:#94A3B8;padding:0 3px;margin-left:2px;}
+.sc-edit-btn:hover{color:var(--rc-blue);}
+.s-item.editing input[type=text]{width:100%;font-size:.84rem;border:1px solid var(--rc-blue);border-radius:5px;padding:.25rem .4rem;outline:none;}
+.badge-tip{position:relative;cursor:default;}
+.badge-tip .tip-txt{display:none;position:absolute;top:calc(100% + 5px);left:50%;transform:translateX(-50%);background:#1e2340;color:#e2e8f0;font-size:.68rem;padding:.3rem .55rem;border-radius:6px;white-space:nowrap;z-index:999;box-shadow:0 3px 12px rgba(0,0,0,.25);pointer-events:none;}
+.badge-tip:hover .tip-txt{display:block;}
 .t-hdr{display:flex;align-items:center;gap:.45rem;margin-bottom:.5rem;flex-wrap:wrap}
 .time-badge{display:flex;align-items:center;gap:4px;background:var(--rc-light);color:var(--rc-blue);padding:.18rem .55rem;border-radius:20px;font-size:.76rem;font-weight:700;font-family:'Barlow Condensed',sans-serif}
 .time-badge.ov{background:#FEF2F2;color:#DC2626}
@@ -734,14 +745,18 @@ function matches(t){
   }
 }
 
+function getCardOrder(day){return JSON.parse(localStorage.getItem('rc_order_'+day)||'[]');}
+function setCardOrder(day,arr){localStorage.setItem('rc_order_'+day,JSON.stringify(arr));}
 function renderAgenda(){
   const el=document.getElementById('agenda');el.innerHTML='';
   document.getElementById('top-title').innerText='Rotina de '+DN[curDay];
   document.getElementById('day-lbl').innerText=DN[curDay];
-  const list=taskCache.filter(matches);
+  let list=taskCache.filter(matches);
   if(!list.length){el.innerHTML='<div class="empty-st"><div class="ei">📋</div><p>Nenhuma atividade para este dia.</p></div>';schedN();return;}
+  const order=getCardOrder(curDate);
+  if(order.length){const map=Object.fromEntries(list.map(t=>[t.id,t]));const ordered=order.filter(id=>map[id]).map(id=>map[id]);const rest=list.filter(t=>!order.includes(t.id));list=[...ordered,...rest];}
+  let dragSrcTask=null;
   list.forEach(t=>{
-    // Filtro de visibilidade
     const vis=t.visibility||'team';
     const uid=currentUser?.uid||'';
     if(vis!=='team' && t.createdBy!==uid && t.sharedWithUid!==uid)return;
@@ -760,6 +775,8 @@ function renderAgenda(){
     const card=document.createElement('div');
     card.className=`task-card ${cardColor} ${(t.critico==='sim'||t.critico==='alta')?'critical':''} ${st==='finalizado'?'done-card':''} ${ov?'overdue':''}`;
     card.dataset.rec=rec;
+    card.dataset.tid=t.id;
+    card.draggable=true;
     let ex='';
     if(rec==='esporadico'&&t.dataEspecifica)ex=`<span class="rec-badge esporadico">${pd(t.dataEspecifica).toLocaleDateString('pt-BR',{day:'numeric',month:'short',year:'numeric'})}</span>`;
     else if(rec==='mensal'&&t.diasMes)ex=`<span class="rec-badge mensal">Dias: ${t.diasMes.map(x=>x==='ultimo'?'Ultimo':x+'o').join(', ')}</span>`;
@@ -767,10 +784,10 @@ function renderAgenda(){
     card.innerHTML=`
       <div class="t-hdr">
         <span class="time-badge ${ov?'ov':''}">${ov?'🔴':'⏱'} ${fmtT(t)}</span>
-        <span class="rec-badge ${rec}">${RI[rec]} ${RL[rec]}</span>
-        ${ex}${t.critico==='sim'?'<span class="crit-badge">🔥 Urgente</span>':t.critico==='alta'?'<span class="crit-badge" style="background:#D97706">⚡ Alta</span>':''}
-        ${vis==='private'?'<span class="crit-badge" style="background:#4B5563;letter-spacing:.5px">🔒 Particular</span>':vis==='shared'?'<span class="crit-badge" style="background:#7B3FBF;letter-spacing:.5px">🤝 Compartilhada</span>':'<span class="crit-badge" style="background:#0E7490;letter-spacing:.5px">🌐 Equipe</span>'}
-        ${ov?'<span class="crit-badge" style="background:#B45309">⌛ Atrasada</span>':''}
+        <span class="rec-badge ${rec} badge-tip">${RI[rec]}<span class="tip-txt">${RL[rec]}</span></span>
+        ${ex}${t.critico==='sim'?'<span class="crit-badge badge-tip">🔥<span class="tip-txt">Urgente</span></span>':t.critico==='alta'?'<span class="crit-badge badge-tip" style="background:#D97706">⚡<span class="tip-txt">Alta</span></span>':''}
+        ${vis==='private'?'<span class="crit-badge badge-tip" style="background:#4B5563">🔒<span class="tip-txt">Particular</span></span>':vis==='shared'?'<span class="crit-badge badge-tip" style="background:#0369A1">🤝<span class="tip-txt">Compartilhada</span></span>':'<span class="crit-badge badge-tip" style="background:#059669">🌐<span class="tip-txt">Equipe</span></span>'}
+        ${ov?'<span class="crit-badge badge-tip" style="background:#B45309">⌛<span class="tip-txt">Atrasada</span></span>':''}
         <span class="status-pill ${st}" data-tid="${t.id}" data-status="${st}">${SL[st]}</span>
         <span class="resp-chip">${t.responsavel||'—'}</span>
       </div>
@@ -780,6 +797,11 @@ function renderAgenda(){
         <button class="btn-edit" onclick="editTask('${t.id}')">✏ Editar</button>
         <button class="btn-del"  onclick="deleteTask('${t.id}')">✕ Excluir</button>
       </div>`;
+    card.addEventListener('dragstart',e=>{dragSrcTask=t.id;card.classList.add('dragging');e.dataTransfer.effectAllowed='move';});
+    card.addEventListener('dragend',()=>{card.classList.remove('dragging');el.querySelectorAll('.task-card').forEach(c=>c.classList.remove('drag-over-card'));});
+    card.addEventListener('dragover',e=>{e.preventDefault();if(dragSrcTask!==t.id)card.classList.add('drag-over-card');});
+    card.addEventListener('dragleave',()=>card.classList.remove('drag-over-card'));
+    card.addEventListener('drop',e=>{e.preventDefault();card.classList.remove('drag-over-card');if(!dragSrcTask||dragSrcTask===t.id)return;const cards=[...el.querySelectorAll('.task-card')];const ids=cards.map(c=>c.dataset.tid);const from=ids.indexOf(dragSrcTask);const to=ids.indexOf(t.id);if(from<0||to<0)return;ids.splice(from,1);ids.splice(to,0,dragSrcTask);setCardOrder(curDate,ids);renderAgenda();});
     el.appendChild(card);
   });
   schedN();
@@ -795,7 +817,19 @@ function renderScratch(){
     const div=document.createElement('div');div.className='s-item'+(it.done?' done':'');
     div.draggable=true;div.dataset.idx=i;
     const dateTxt=it.createdAt?`<div style="font-size:.65rem;color:#aab;margin-top:3px;">Criado em ${new Date(it.createdAt).toLocaleDateString('pt-BR')}</div>`:'';
-    div.innerHTML=`<input type="checkbox" ${it.done?'checked':''} onchange="togSc(${i})"><span>${it.text}${dateTxt}</span><button class="s-del" onclick="delSc(${i})">✕</button>`;
+    const hist=it.history||[];
+    const tooltipHtml=hist.length?`<div class="sc-tooltip"><strong>Versões anteriores:</strong>\n${hist.map((h,n)=>`${n+1}. "${h.text}" — ${new Date(h.editedAt).toLocaleDateString('pt-BR')}`).join('\n')}</div>`:'';
+    div.innerHTML=`<input type="checkbox" ${it.done?'checked':''} onchange="togSc(${i})"><span class="sc-tooltip-wrap">${it.text}${dateTxt}${tooltipHtml}</span><button class="sc-edit-btn" title="Editar nota" onclick="editSc(${i})">✏</button><button class="s-del" onclick="delSc(${i})">✕</button>`;
+    // Position tooltip via JS
+    if(hist.length){
+      const wrap=div.querySelector('.sc-tooltip-wrap');
+      const tip=div.querySelector('.sc-tooltip');
+      wrap.addEventListener('mouseenter',()=>{
+        const r=wrap.getBoundingClientRect();
+        tip.style.top=(r.bottom+6)+'px';
+        tip.style.left=r.left+'px';
+      });
+    }
     div.addEventListener('dragstart',e=>{dragSrcIdx=i;div.classList.add('dragging');e.dataTransfer.effectAllowed='move';});
     div.addEventListener('dragend',()=>{div.classList.remove('dragging');document.querySelectorAll('.s-item').forEach(el=>el.classList.remove('drag-over'));});
     div.addEventListener('dragover',e=>{e.preventDefault();div.classList.add('drag-over');});
@@ -804,7 +838,32 @@ function renderScratch(){
     lst.appendChild(div);
   });
 }
-function addScratch(){const inp=document.getElementById('scratch-in');const t=inp.value.trim();if(!t)return;const a=getSc();a.unshift({text:t,done:false,createdAt:Date.now()});setSc(a);inp.value='';renderScratch();}
+function editSc(i){
+  const lst=document.getElementById('scratch-list');
+  const items=lst.querySelectorAll('.s-item');
+  const div=items[i];if(!div)return;
+  const spanWrap=div.querySelector('.sc-tooltip-wrap');
+  const a=getSc();const it=a[i];
+  // Replace span content with input
+  const oldText=it.text;
+  const inp=document.createElement('input');
+  inp.type='text';inp.value=oldText;inp.style.cssText='flex:1;font-size:.84rem;border:1px solid var(--rc-blue,#2127C9);border-radius:5px;padding:.25rem .4rem;outline:none;width:100%;';
+  spanWrap.replaceWith(inp);
+  inp.focus();inp.select();
+  function save(){
+    const novo=inp.value.trim();
+    if(novo&&novo!==oldText){
+      if(!a[i].history)a[i].history=[];
+      a[i].history.unshift({text:oldText,editedAt:Date.now()});
+      a[i].text=novo;
+      setSc(a);
+    }
+    renderScratch();
+  }
+  inp.addEventListener('blur',save);
+  inp.addEventListener('keydown',e=>{if(e.key==='Enter')inp.blur();if(e.key==='Escape'){inp.value=oldText;inp.blur();}});
+}
+function addScratch(){const inp=document.getElementById('scratch-in');const t=inp.value.trim();if(!t)return;const a=getSc();a.unshift({text:t,done:false,createdAt:Date.now(),history:[]});setSc(a);inp.value='';renderScratch();}
 function togSc(i){const a=getSc();a[i].done=!a[i].done;setSc(a);renderScratch();}
 function delSc(i){const a=getSc();a.splice(i,1);setSc(a);renderScratch();}
 
