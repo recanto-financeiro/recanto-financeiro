@@ -392,7 +392,10 @@ service cloud.firestore {
     <div class="agenda-sec">
       <div class="topbar">
         <div class="topbar-left"><h2 id="top-title">Rotina de Segunda-feira</h2><div class="topbar-sub">Guia Operacional do Financeiro</div></div>
-        <div class="topbar-date" id="top-date">—</div>
+        <div style="display:flex;align-items:center;gap:.75rem;">
+          <button onclick="openModalHoje()" style="background:var(--rc-orange);color:white;border:none;border-radius:8px;padding:.45rem .9rem;font-size:.8rem;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:.4rem;white-space:nowrap;box-shadow:0 2px 8px rgba(242,96,32,.3);">📌 Tarefa para Hoje</button>
+          <div class="topbar-date" id="top-date">—</div>
+        </div>
       </div>
       <div class="content-area">
         <div class="day-hdr"><h3 id="day-lbl">Segunda-feira</h3><div class="day-hdr-bar"><div class="day-hdr-fill"></div></div></div>
@@ -428,9 +431,35 @@ service cloud.firestore {
         <button type="button" class="rec-opt" data-v="esporadico" onclick="setRec('esporadico')"><span class="ri">📌</span>Esporádico</button>
       </div>
       <div class="rec-sec v" id="sec-semanal"><div class="fg"><label>Dia da Semana</label><select id="t-day"><option value="segunda">Segunda-feira</option><option value="terca">Terça-feira</option><option value="quarta">Quarta-feira</option><option value="quinta">Quinta-feira</option><option value="sexta">Sexta-feira</option></select></div></div>
-      <div class="rec-sec" id="sec-mensal"><div class="fg"><label>Dias do mês</label><div class="md-grid" id="md-grid"></div><div class="days-disp" id="days-disp">Nenhum dia selecionado</div></div></div>
-      <div class="rec-sec" id="sec-anual"><div class="fg"><label>Mês do ano</label><div class="an-months" id="an-months"></div></div><div class="an-day-row"><label>Dia do mês</label><input type="number" id="an-day" min="1" max="31" placeholder="1"></div></div>
-      <div class="rec-sec" id="sec-esporadico"><div class="fg"><label>Data da Demanda</label><div class="mini-cal" id="mini-cal"></div><div class="d-disp empty" id="d-disp">📅 Nenhuma data selecionada</div><input type="hidden" id="t-data-esp"></div></div>
+      <div class="rec-sec" id="sec-mensal">
+        <div class="fg">
+          <label>Dias do mês</label>
+          <div id="days-disp" class="d-disp empty" onclick="toggleMensal()" style="cursor:pointer;user-select:none;">📅 Clique para selecionar os dias</div>
+          <div id="mensal-wrap" style="display:none;border:1.5px solid var(--brand-line);border-radius:10px;padding:.75rem;background:white;box-shadow:0 8px 32px rgba(33,39,201,.12);margin-top:4px;">
+            <div class="md-grid" id="md-grid"></div>
+          </div>
+        </div>
+      </div>
+      <div class="rec-sec" id="sec-anual">
+        <div class="fg">
+          <label>Data anual</label>
+          <div id="anual-disp" class="d-disp empty" onclick="toggleAnual()" style="cursor:pointer;user-select:none;">📅 Clique para selecionar mês e dia</div>
+          <div id="anual-wrap" style="display:none;border:1.5px solid var(--brand-line);border-radius:10px;padding:.75rem;background:white;box-shadow:0 8px 32px rgba(33,39,201,.12);margin-top:4px;">
+            <div style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;">
+              <div style="flex:1;min-width:120px;"><label style="font-size:.72rem;font-weight:700;color:var(--tm);display:block;margin-bottom:.3rem;">MÊS</label><select id="an-mo-sel" onchange="updAnualDisp()" style="width:100%;padding:.45rem .6rem;border:1.5px solid var(--brand-line);border-radius:7px;font-size:.88rem;outline:none;background:#F8F9FF;"><option value="-1">— Selecione —</option></select></div>
+              <div style="width:80px;"><label style="font-size:.72rem;font-weight:700;color:var(--tm);display:block;margin-bottom:.3rem;">DIA</label><input type="number" id="an-day" min="1" max="31" placeholder="1" onchange="updAnualDisp()" style="width:100%;padding:.45rem .6rem;border:1.5px solid var(--brand-line);border-radius:7px;font-size:.88rem;text-align:center;outline:none;background:#F8F9FF;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="rec-sec" id="sec-esporadico"><div class="fg"><label>Data da Demanda</label>
+        <div style="position:relative">
+          <div id="d-disp" class="d-disp empty" onclick="toggleMC()" style="cursor:pointer;user-select:none;">📅 Clique para selecionar a data</div>
+          <div id="mini-cal-wrap" style="display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:500;background:white;border-radius:10px;box-shadow:0 8px 32px rgba(33,39,201,.18);border:1.5px solid var(--brand-line);min-width:280px;">
+            <div class="mini-cal" id="mini-cal"></div>
+          </div>
+        </div>
+        <input type="hidden" id="t-data-esp"></div></div>
       <div class="rec-sec" id="sec-diario"></div>
       <div class="time-sel-row">
         <legend>⏰ Horário da Atividade</legend>
@@ -572,7 +601,34 @@ function updTP(){
   p.innerText=`${ini} → ${eh}:${emm}  ·  ${dl}`;
 }
 
-function reqN(){if('Notification'in window&&Notification.permission==='default')Notification.requestPermission();}
+function reqN(){
+  if('Notification'in window&&Notification.permission==='default')
+    Notification.requestPermission();
+}
+
+// Audio context for notification beep
+function playNotifSound(){
+  try{
+    const ctx=new(window.AudioContext||window.webkitAudioContext)();
+    [0,150,300].forEach(delay=>{
+      const o=ctx.createOscillator();const g=ctx.createGain();
+      o.connect(g);g.connect(ctx.destination);
+      o.type='sine';o.frequency.value=880;
+      g.gain.setValueAtTime(0,ctx.currentTime+delay/1000);
+      g.gain.linearRampToValueAtTime(0.3,ctx.currentTime+delay/1000+0.05);
+      g.gain.linearRampToValueAtTime(0,ctx.currentTime+delay/1000+0.25);
+      o.start(ctx.currentTime+delay/1000);o.stop(ctx.currentTime+delay/1000+0.3);
+    });
+  }catch(e){}
+}
+
+// Tab badge counter
+let tabBadge=0;
+const origTitle=document.title;
+function addTabBadge(){tabBadge++;document.title=`(${tabBadge}) ${origTitle}`;}
+function clearTabBadge(){tabBadge=0;document.title=origTitle;}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)clearTabBadge();});
+
 function cancelN(){Object.values(notifTimers).forEach(clearTimeout);notifTimers={};}
 function schedN(){
   cancelN();if(curDate!==fd(new Date()))return;
@@ -596,8 +652,20 @@ function showNT(t){
     <div class="nt-title">⏰ Tempo encerrado!</div>
     <div class="nt-body"><strong>${t.tarefa}</strong><br>Resp.: ${t.responsavel||'—'} · ${fmtT(t)}</div>`;
   document.body.appendChild(div);
-  if('Notification'in window&&Notification.permission==='granted')
-    new Notification('⏰ Recanto',{body:`${t.tarefa} — tempo encerrado`,tag:'rc_'+t.id});
+  // Sound
+  playNotifSound();
+  // Tab badge (only when page is hidden)
+  if(document.hidden)addTabBadge();
+  // Push notification (works in background tabs)
+  if('Notification'in window&&Notification.permission==='granted'){
+    const n=new Notification('⏰ Recanto Financeiro',{
+      body:`${t.tarefa}\nResp.: ${t.responsavel||'—'} · ${fmtT(t)}`,
+      tag:'rc_'+t.id,
+      icon:'LOGO-RECANTO-COLORIDA.png',
+      requireInteraction:true
+    });
+    n.onclick=()=>{window.focus();n.close();};
+  }
   setTimeout(()=>{if(div.parentElement)div.remove();},14000);
 }
 
@@ -744,7 +812,22 @@ function matches(t){
       }
       return d.getDate()===t.diaAnual&&d.getMonth()===t.mesAnual;
     }
-    case 'esporadico': return t.dataEspecifica===curDate;
+    case 'esporadico': {
+      if(!t.dataEspecifica)return false;
+      const taskDate=t.dataEspecifica;
+      // Show on exact date OR carry forward if not finalizado on past dates
+      if(taskDate===curDate)return true;
+      if(taskDate<curDate){
+        // Carry forward: show today if not finalizado on original date or any day since
+        const st=(t.statusByDate||{})[taskDate]||'pendente';
+        if(st==='finalizado')return false;
+        // Also check if finalizado on any day between taskDate and curDate
+        const statusDates=Object.keys(t.statusByDate||{});
+        const finalized=statusDates.some(d=>d>=taskDate&&d<=curDate&&t.statusByDate[d]==='finalizado');
+        return !finalized;
+      }
+      return false;
+    }
     default: return t.dia===curDay;
   }
 }
@@ -823,7 +906,10 @@ let dragSrcIdx=null;
 function renderScratch(){
   const lst=document.getElementById('scratch-list');const items=getSc();lst.innerHTML='';
   if(!items.length){lst.innerHTML='<div class="s-empty">Nenhuma nota ainda.</div>';return;}
-  items.forEach((it,i)=>{
+  // Sort: incomplete first, done last
+  const sorted=[...items.map((it,i)=>({...it,_orig:i}))].sort((a,b)=>(a.done===b.done)?0:a.done?1:-1);
+  sorted.forEach((it)=>{
+    const i=it._orig;
     const div=document.createElement('div');div.className='s-item'+(it.done?' done':'');
     div.draggable=true;div.dataset.idx=i;
     const dateTxt=it.createdAt?`<div style="font-size:.65rem;color:#aab;margin-top:3px;">Criado em ${new Date(it.createdAt).toLocaleDateString('pt-BR')}</div>`:'';
@@ -904,6 +990,23 @@ function onVisibilityChange(){
   document.getElementById('shared-user-wrap').style.display=v==='shared'?'block':'none';
 }
 
+function openModalHoje(){
+  clearModal();
+  setRec('esporadico');
+  populateUDL();
+  // Pre-select today's date in the mini calendar
+  const today=fd(new Date());
+  document.getElementById('t-data-esp').value=today;
+  const d=new Date();
+  const dd=document.getElementById('d-disp');
+  dd.className='d-disp filled';
+  dd.textContent='📅 '+d.toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'});
+  mcSel=today;mcY=d.getFullYear();mcM=d.getMonth();
+  const wrap=document.getElementById('mini-cal-wrap');if(wrap)wrap.style.display='none';
+  document.getElementById('modal-title').innerText='Tarefa para Hoje';
+  document.getElementById('btn-sv').innerText='Salvar na Agenda';
+  document.getElementById('task-modal').classList.add('open');
+}
 function openModal(){clearModal();setRec('semanal');populateUDL();document.getElementById('t-day').value=curDay;document.getElementById('modal-title').innerText='Adicionar Nova Tarefa';document.getElementById('btn-sv').innerText='Salvar na Agenda';document.getElementById('task-modal').classList.add('open');}
 function closeModal(){document.getElementById('task-modal').classList.remove('open');}
 function clearModal(){
@@ -918,6 +1021,10 @@ function clearModal(){
   document.getElementById('t-shared-uid').value='';
   const dd=document.getElementById('d-disp');if(dd){dd.className='d-disp empty';dd.innerHTML='📅 Nenhuma data selecionada';}
   selMDays.clear();selAnMo=-1;mcSel='';document.getElementById('time-preview').innerText='Selecione o horario e a duracao';
+  const dd2=document.getElementById('days-disp');if(dd2){dd2.className='d-disp empty';dd2.innerHTML='📅 Clique para selecionar os dias';}
+  const ad=document.getElementById('anual-disp');if(ad){ad.className='d-disp empty';ad.innerHTML='📅 Clique para selecionar mês e dia';}
+  const mw=document.getElementById('mensal-wrap');if(mw)mw.style.display='none';
+  const aw=document.getElementById('anual-wrap');if(aw)aw.style.display='none';
 }
 document.getElementById('task-modal').addEventListener('click',function(e){if(e.target===this)closeModal();});
 
@@ -940,7 +1047,7 @@ async function saveTask(){
   if(rec==='semanal')item.dia=document.getElementById('t-day').value;
   if(rec==='diario')item.dia='todos';
   if(rec==='mensal'){item.diasMes=[...selMDays];if(!item.diasMes.length){alert('Selecione ao menos um dia.');return;}}
-  if(rec==='anual'){if(selAnMo===-1){alert('Selecione o mes.');return;}const dv=parseInt(document.getElementById('an-day').value);if(!dv||dv<1||dv>31){alert('Dia invalido.');return;}item.mesAnual=selAnMo;item.diaAnual=dv;}
+  if(rec==='anual'){const moSel=document.getElementById('an-mo-sel');const mo=moSel?parseInt(moSel.value):selAnMo;if(mo===-1){alert('Selecione o mês.');return;}const dv=parseInt(document.getElementById('an-day').value);if(!dv||dv<1||dv>31){alert('Dia inválido.');return;}item.mesAnual=mo;item.diaAnual=dv;selAnMo=mo;}
   if(rec==='esporadico'){item.dataEspecifica=document.getElementById('t-data-esp').value;if(!item.dataEspecifica){alert('Selecione uma data.');return;}item.dia=DM[pd(item.dataEspecifica).getDay()]||curDay;}
   try{if(id)await db.collection('tasks').doc(id).update(item);else await db.collection('tasks').add(item);closeModal();}
   catch(e){alert('Erro ao salvar: '+e.message);}
@@ -960,7 +1067,7 @@ function editTask(id){
     setTimeout(()=>{document.getElementById('t-shared-uid').value=t.sharedWithUid;},200);
   }
   if(rec==='mensal'&&t.diasMes){t.diasMes.forEach(d=>selMDays.add(d));genMG();updDD();}
-  if(rec==='anual'){selAnMo=t.mesAnual??-1;document.getElementById('an-day').value=t.diaAnual||'';genAnM();}
+  if(rec==='anual'){selAnMo=t.mesAnual??-1;document.getElementById('an-day').value=t.diaAnual||'';genAnM();if(selAnMo>=0&&t.diaAnual){const disp=document.getElementById('anual-disp');disp.className='d-disp filled';disp.innerHTML='📅 '+t.diaAnual+' de '+MPT[selAnMo];}}
   if(rec==='esporadico'&&t.dataEspecifica){mcSel=t.dataEspecifica;const d=pd(t.dataEspecifica);mcY=d.getFullYear();mcM=d.getMonth();genMC();const br=d.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});const dd=document.getElementById('d-disp');dd.className='d-disp filled';dd.innerHTML='📅 '+br.charAt(0).toUpperCase()+br.slice(1);document.getElementById('t-data-esp').value=t.dataEspecifica;}
   document.getElementById('modal-title').innerText='Editando Tarefa';document.getElementById('btn-sv').innerText='Salvar Alteracoes';
   // Bloquear visibilidade se não for o criador
@@ -979,20 +1086,67 @@ async function deleteTask(id){
   if(notifTimers[id]){clearTimeout(notifTimers[id]);delete notifTimers[id];}
 }
 
+function toggleMensal(){
+  const wrap=document.getElementById('mensal-wrap');
+  const open=wrap.style.display==='none';
+  wrap.style.display=open?'block':'none';
+  if(open)genMG();
+  if(open){setTimeout(()=>{function oc(e){if(!wrap.contains(e.target)&&e.target.id!=='days-disp'){wrap.style.display='none';document.removeEventListener('mousedown',oc);}}document.addEventListener('mousedown',oc);},10);}
+}
+function toggleAnual(){
+  const wrap=document.getElementById('anual-wrap');
+  const open=wrap.style.display==='none';
+  wrap.style.display=open?'block':'none';
+  if(open)genAnM();
+  if(open){setTimeout(()=>{function oc(e){if(!wrap.contains(e.target)&&e.target.id!=='anual-disp'){wrap.style.display='none';document.removeEventListener('mousedown',oc);}}document.addEventListener('mousedown',oc);},10);}
+}
+function updAnualDisp(){
+  const mo=parseInt(document.getElementById('an-mo-sel').value);
+  const dy=document.getElementById('an-day').value;
+  selAnMo=mo;
+  const disp=document.getElementById('anual-disp');
+  if(mo>=0&&dy){disp.className='d-disp filled';disp.innerHTML='\ud83d\udcc5 '+dy+' de '+MPT[mo];document.getElementById('anual-wrap').style.display='none';}
+  else{disp.className='d-disp empty';disp.innerHTML='\ud83d\udcc5 Clique para selecionar m\u00eas e dia';}
+}
 function genMG(){
   const g=document.getElementById('md-grid');g.innerHTML='';
   for(let i=1;i<=31;i++){const b=document.createElement('button');b.type='button';b.className='md-btn'+(selMDays.has(i)?' sel':'');b.innerText=i;b.onclick=()=>togMD(i);g.appendChild(b);}
   const u=document.createElement('button');u.type='button';u.className='md-btn ult'+(selMDays.has('ultimo')?' sel':'');u.innerText='Ult.';u.onclick=()=>togMD('ultimo');g.appendChild(u);
 }
-function togMD(x){if(selMDays.has(x))selMDays.delete(x);else selMDays.add(x);genMG();updDD();}
-function updDD(){
-  const d=document.getElementById('days-disp');if(!selMDays.size){d.innerText='Nenhum dia selecionado';return;}
+function togMD(x){
+  if(selMDays.has(x))selMDays.delete(x);else selMDays.add(x);
+  genMG();
+  const d=document.getElementById('days-disp');
+  if(!selMDays.size){d.className='d-disp empty';d.innerHTML='\ud83d\udcc5 Clique para selecionar os dias';return;}
   const a=[...selMDays].sort((a,b)=>a==='ultimo'?1:b==='ultimo'?-1:a-b);
-  d.innerHTML=a.map(x=>`<span class="dchip">${x==='ultimo'?'Ultimo':x+'o'}</span>`).join('');
+  d.className='d-disp filled';d.innerHTML='\ud83d\udcc5 Dias: '+a.map(x=>x==='ultimo'?'\u00daltimo':x+'\u00b0').join(', ');
+}
+function updDD(){
+  const d=document.getElementById('days-disp');
+  if(!selMDays.size){d.className='d-disp empty';d.innerHTML='\ud83d\udcc5 Clique para selecionar os dias';return;}
+  const a=[...selMDays].sort((a,b)=>a==='ultimo'?1:b==='ultimo'?-1:a-b);
+  d.className='d-disp filled';d.innerHTML='\ud83d\udcc5 Dias: '+a.map(x=>x==='ultimo'?'\u00daltimo':x+'\u00b0').join(', ');
 }
 function genAnM(){
-  const g=document.getElementById('an-months');g.innerHTML='';
-  MS.forEach((m,i)=>{const b=document.createElement('button');b.type='button';b.className='mo-btn'+(selAnMo===i?' sel':'');b.innerText=m;b.onclick=()=>{selAnMo=i;genAnM();};g.appendChild(b);});
+  const sel=document.getElementById('an-mo-sel');if(!sel)return;
+  const prev=sel.value;
+  sel.innerHTML='<option value="-1">\u2014 Selecione \u2014</option>';
+  MPT.forEach((m,i)=>{const o=document.createElement('option');o.value=i;o.text=m;if(selAnMo===i||parseInt(prev)===i)o.selected=true;sel.appendChild(o);});
+}
+function toggleMC(){
+  const wrap=document.getElementById('mini-cal-wrap');
+  const open=wrap.style.display==='none';
+  wrap.style.display=open?'block':'none';
+  if(open)genMC();
+  // Close when clicking outside
+  if(open){
+    setTimeout(()=>{
+      function outsideClick(e){
+        if(!wrap.contains(e.target)&&e.target.id!=='d-disp'){wrap.style.display='none';document.removeEventListener('mousedown',outsideClick);}
+      }
+      document.addEventListener('mousedown',outsideClick);
+    },10);
+  }
 }
 function genMC(){
   const todStr=fd(new Date());const fd2=new Date(mcY,mcM,1).getDay();const dim=new Date(mcY,mcM+1,0).getDate();const off=fd2===0?6:fd2-1;
@@ -1009,6 +1163,7 @@ function genMC(){
 function navMC(dir){mcM+=dir;if(mcM>11){mcM=0;mcY++;}if(mcM<0){mcM=11;mcY--;}genMC();}
 function pickD(dstr){
   mcSel=dstr;document.getElementById('t-data-esp').value=dstr;
+  const wrap=document.getElementById('mini-cal-wrap');if(wrap)wrap.style.display='none';
   const d=pd(dstr);const br=d.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   const dd=document.getElementById('d-disp');dd.className='d-disp filled';dd.innerHTML='📅 '+br.charAt(0).toUpperCase()+br.slice(1);genMC();
 }
