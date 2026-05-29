@@ -642,7 +642,7 @@ function schedN(){
   const uid=currentUser?.uid||'';
   taskCache.filter(matches).forEach(t=>{
     const vis=t.visibility||'team';
-    if(vis!=='team' && t.createdBy!==uid && t.sharedWithUid!==uid)return;
+    const isOwner_v=!t.createdBy||t.createdBy===uid;if(vis!=='team' && !isOwner_v && t.sharedWithUid!==uid)return;
     if(!t.horInicio||!t.duracao||t.duracao===0)return;
     if(((t.statusByDate||{})[curDate])==='finalizado')return;
     const[h,m]=t.horInicio.split(':').map(Number);const now=new Date();
@@ -860,7 +860,8 @@ function hasPendingOnDay(dayId, dstr){
   return taskCache.some(t=>{
     const vis=t.visibility||'team';
     const uid=currentUser?.uid||'';
-    if(vis!=='team'&&t.createdBy!==uid&&t.sharedWithUid!==uid)return false;
+    const isOwner=!t.createdBy||t.createdBy===uid;
+    if(vis!=='team' && !isOwner && t.sharedWithUid!==uid)return false;
     const rec=t.recorrencia||'semanal';
     let appears=false;
     if(rec==='diario')appears=true;
@@ -901,7 +902,7 @@ function renderAgenda(){
   list.forEach(t=>{
     const vis=t.visibility||'team';
     const uid=currentUser?.uid||'';
-    if(vis!=='team' && t.createdBy!==uid && t.sharedWithUid!==uid)return;
+    const isOwner_v=!t.createdBy||t.createdBy===uid;if(vis!=='team' && !isOwner_v && t.sharedWithUid!==uid)return;
     const rec=t.recorrencia||'semanal';
     const st=(t.statusByDate||{})[curDate]||'pendente';
     const ov=st!=='finalizado'&&isOv(t);
