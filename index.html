@@ -96,7 +96,12 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--td);min-he
 .d-mon{font-size:.6rem;color:#3F4E90;line-height:1.5}
 .day-btn.active .d-mon{color:rgba(255,255,255,.55)}
 .today-dot{color:var(--rc-orange);font-weight:900;margin-left:2px}
-.day-btn.active .today-dot{color:#FFB060}
+.day-btn.has-pending{background:rgba(251,191,36,.12);}
+.day-btn.has-pending .d-name{color:#FCD34D;}
+.day-btn.has-pending.active{background:var(--rc-blue);}
+.day-btn.has-pending.active .d-name{color:white;}
+.pending-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#F59E0B;margin-left:4px;vertical-align:middle;flex-shrink:0;}
+.day-btn.active .pending-dot{background:#FFD700;}
 .sb-div{margin:.75rem 1.4rem;border:none;border-top:1px solid rgba(255,255,255,.07);flex-shrink:0}
 .sb-actions{padding:0 .8rem;display:flex;flex-direction:column;gap:4px;flex-shrink:0}
 .sb-btn{display:flex;align-items:center;gap:.85rem;padding:.58rem .62rem;border:none;border-radius:8px;cursor:pointer;font-family:'Barlow',sans-serif;font-size:.82rem;font-weight:600;text-align:left;transition:all .15s;white-space:nowrap;width:100%}
@@ -249,6 +254,8 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--td);min-he
 .task-card.mine-only .resp-chip::before{background:#2127C9;}
 .task-card.team-task{border-left-color:#F26020!important;background:linear-gradient(to right,#FFF4EE 0%,white 70%);}
 .task-card.team-task .resp-chip::before{background:#F26020;}
+.task-card.carryover{border-left-color:#B45309!important;background:linear-gradient(to right,#FFFBEB 0%,white 70%);border-top:2px dashed #D97706;}
+.carryover-badge{display:inline-flex;align-items:center;gap:.3rem;font-size:.68rem;font-weight:700;color:#92400E;background:#FEF3C7;border:1px solid #F59E0B;border-radius:5px;padding:.18rem .5rem;margin-bottom:.35rem;}
 .task-card.no-resp{border-left-color:#94A3B8!important;background:white;}
 .task-card.no-resp .resp-chip::before{background:#94A3B8;}
 .hid-date{position:fixed;opacity:0;width:0;height:0;pointer-events:none}
@@ -750,6 +757,7 @@ document.addEventListener('click',async function(e){
   if(card){card.classList.toggle('done-card',next==='finalizado');const ti=card.querySelector('.t-title');if(ti)ti.style.textDecoration=next==='finalizado'?'line-through':'none';}
   if(next==='finalizado'&&notifTimers[tid]){clearTimeout(notifTimers[tid]);delete notifTimers[tid];const t=document.getElementById('nt_'+tid);if(t)t.remove();}
   if(next==='finalizado')launchFireworks();
+  genCal(pd(curDate));
   try{await db.collection('tasks').doc(tid).update({[`statusByDate.${curDate}`]:next});}catch(err){console.error(err);}
 });
 
@@ -767,10 +775,12 @@ function genCal(base=new Date()){
     const d=new Date(mon);d.setDate(mon.getDate()+(i-1));
     const dayId=DM[i],dstr=fd(d);
     const isT=dstr===todStr;
-    const btn=document.createElement('button');btn.className='day-btn'+(curDay===dayId?' active':'');
+    const hasPending=hasPendingOnDay(dayId,dstr);
+    const pendingDot=hasPending?'<span class="pending-dot"></span>':'';
+    const btn=document.createElement('button');btn.className='day-btn'+(curDay===dayId?' active':'')+(hasPending?' has-pending':'');
     btn.addEventListener('click',()=>selDay(dayId,dstr,d,btn));
     btn.innerHTML=`<div class="d-badge"><span class="num">${d.getDate()}</span><span class="abbr">${DS[i]}</span></div>
-      <div class="d-inf"><span class="d-name">${DN[dayId].split('-')[0]}</span>
+      <div class="d-inf"><span class="d-name">${DN[dayId].split('-')[0]}${pendingDot}</span>
       <span class="d-mon">${MS[d.getMonth()]}${isT?'<span class="today-dot">•</span>':''}</span></div>`;
     cont.appendChild(btn);
   }
@@ -815,23 +825,62 @@ function matches(t){
     case 'esporadico': {
       if(!t.dataEspecifica)return false;
       const taskDate=t.dataEspecifica;
-      // Show on exact date OR carry forward if not finalizado on past dates
-      if(taskDate===curDate)return true;
-      if(taskDate<curDate){
-        // Carry forward: show today if not finalizado on original date or any day since
-        const st=(t.statusByDate||{})[taskDate]||'pendente';
-        if(st==='finalizado')return false;
-        // Also check if finalizado on any day between taskDate and curDate
-        const statusDates=Object.keys(t.statusByDate||{});
-        const finalized=statusDates.some(d=>d>=taskDate&&d<=curDate&&t.statusByDate[d]==='finalizado');
-        return !finalized;
+      const now=new Date();
+      const todayStr=fd(now);
+      const statusByDate=t.statusByDate||{};
+
+      // Find if finalized on any day
+      const finalizedOn=Object.keys(statusByDate).find(d=>statusByDate[d]==='finalizado');
+
+      if(finalizedOn){
+        // Only show on the day it was finalized
+        return curDate===finalizedOn;
       }
+
+      // Not finalized yet
+      if(curDate===taskDate){
+        // Show on original day only before 18h
+        if(taskDate===todayStr)return now.getHours()<18;
+        // If original day is in the past, hide it (it has been carried forward)
+        return false;
+      }
+
+      // Show on carry-forward days (after original date, not finalized)
+      if(curDate>taskDate)return true;
+
       return false;
     }
     default: return t.dia===curDay;
   }
 }
 
+function hasPendingOnDay(dayId, dstr){
+  const todayStr=fd(new Date());
+  if(dstr>todayStr)return false;
+  return taskCache.some(t=>{
+    const vis=t.visibility||'team';
+    const uid=currentUser?.uid||'';
+    if(vis!=='team'&&t.createdBy!==uid&&t.sharedWithUid!==uid)return false;
+    const rec=t.recorrencia||'semanal';
+    let appears=false;
+    if(rec==='diario')appears=true;
+    else if(rec==='semanal')appears=t.dia===dayId;
+    else if(rec==='mensal'){const d=pd(dstr);appears=(t.diasMes||[]).some(x=>x==='ultimo'?isLD(d):x===d.getDate());}
+    else if(rec==='anual'){const d=pd(dstr);appears=d.getDate()===t.diaAnual&&d.getMonth()===t.mesAnual;}
+    else if(rec==='esporadico'){
+      if(!t.dataEspecifica)return false;
+      const finalizedOn=Object.keys(t.statusByDate||{}).find(d=>t.statusByDate[d]==='finalizado');
+      if(finalizedOn)return false; // finalized somewhere, never pending
+      if(dstr===t.dataEspecifica||dstr>t.dataEspecifica)appears=true;
+    }
+    if(!appears)return false;
+    const st=(t.statusByDate||{})[dstr];
+    // Past days: only flag if explicitly marked pendente or andamento
+    if(dstr<todayStr)return st==='pendente'||st==='andamento';
+    // Today: flag if not finalizado (including no status = pending)
+    return st!=='finalizado';
+  });
+}
 function getCardOrder(day){return JSON.parse(localStorage.getItem('rc_order_'+day)||'[]');}
 function setCardOrder(day,arr){localStorage.setItem('rc_order_'+day,JSON.stringify(arr));}
 function renderAgenda(){
@@ -859,8 +908,10 @@ function renderAgenda(){
     const myName=(currentProfile?.name||'').toLowerCase();
     const resp=(t.responsavel||'').toLowerCase().trim();
     const isOnlyMe=resp&&resp===myName;
+    const isCarryover=rec==='esporadico'&&t.dataEspecifica&&t.dataEspecifica<curDate;
     let cardColor='';
-    if(vis==='private'&&t.createdBy===uid)cardColor='mine-only';
+    if(isCarryover)cardColor='carryover';
+    else if(vis==='private'&&t.createdBy===uid)cardColor='mine-only';
     else if(vis==='shared')cardColor='team-task';
     else if(vis==='team')cardColor='team-task';
     else if(isOnlyMe)cardColor='mine-only';
@@ -870,11 +921,15 @@ function renderAgenda(){
     card.dataset.rec=rec;
     card.dataset.tid=t.id;
     card.draggable=true;
+    const originDate=isCarryover?pd(t.dataEspecifica).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'}):null;
+    const carryBadge=isCarryover?`<div class="carryover-badge">⚠️ Pendente desde ${originDate} — não concluída no prazo</div>`:'';
+
     let ex='';
     if(rec==='esporadico'&&t.dataEspecifica)ex=`<span class="rec-badge esporadico">${pd(t.dataEspecifica).toLocaleDateString('pt-BR',{day:'numeric',month:'short',year:'numeric'})}</span>`;
     else if(rec==='mensal'&&t.diasMes)ex=`<span class="rec-badge mensal">Dias: ${t.diasMes.map(x=>x==='ultimo'?'Ultimo':x+'o').join(', ')}</span>`;
     else if(rec==='anual'&&t.mesAnual!==undefined)ex=`<span class="rec-badge anual">${t.diaAnual}/${MS[t.mesAnual]}</span>`;
     card.innerHTML=`
+      ${carryBadge}
       <div class="t-hdr">
         <span class="time-badge ${ov?'ov':''}">${ov?'🔴':'⏱'} ${fmtT(t)}</span>
         <span class="rec-badge ${rec} badge-tip">${RI[rec]}<span class="tip-txt">${RL[rec]}</span></span>
