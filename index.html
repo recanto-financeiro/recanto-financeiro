@@ -757,8 +757,13 @@ document.addEventListener('click',async function(e){
   if(card){card.classList.toggle('done-card',next==='finalizado');const ti=card.querySelector('.t-title');if(ti)ti.style.textDecoration=next==='finalizado'?'line-through':'none';}
   if(next==='finalizado'&&notifTimers[tid]){clearTimeout(notifTimers[tid]);delete notifTimers[tid];const t=document.getElementById('nt_'+tid);if(t)t.remove();}
   if(next==='finalizado')launchFireworks();
-  genCal(pd(curDate));
-  try{await db.collection('tasks').doc(tid).update({[`statusByDate.${curDate}`]:next});}catch(err){console.error(err);}
+  try{
+    await db.collection('tasks').doc(tid).update({[`statusByDate.${curDate}`]:next});
+    // Update taskCache locally so genCal reflects the new status immediately
+    const cached=taskCache.find(x=>x.id===tid);
+    if(cached){if(!cached.statusByDate)cached.statusByDate={};cached.statusByDate[curDate]=next;}
+    genCal(pd(curDate));
+  }catch(err){console.error(err);}
 });
 
 function genCal(base=new Date()){
